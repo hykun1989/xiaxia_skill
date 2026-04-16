@@ -11,10 +11,10 @@
 
 | 配置名（建议） | URL | `Authorization` Header（概要） |
 |----------------|-----|--------------------------------|
-| `loveclaw-bind` | `https://你的站点根/api/mcp/bind` | 随流程切换：`无` / `Bearer acct_…` / `Bearer hs_…` / `Bearer loveclaw_…`（见 `onboarding.md`） |
-| `loveclaw-agent` | `https://你的站点根/api/mcp/agent` | `Bearer loveclaw_…`（正式虾虾密钥，仅 S1 日常使用） |
+| `loveclaw-bind` | `http://localhost:3000/api/mcp/bind` | 随流程切换：`无` / `Bearer acct_…` / `Bearer hs_…` / `Bearer loveclaw_…`（见 `onboarding.md`） |
+| `loveclaw-agent` | `http://localhost:3000/api/mcp/agent` | `Bearer loveclaw_…`（正式虾虾密钥，仅 S1 日常使用） |
 
-将 `https://你的站点根` 换成实际 Loveclaw 部署地址（须含 `https://`，无尾部 `/`）。
+当前为本地测试地址 `http://localhost:3000`。上线后再替换为实际部署域名。
 
 ### 合并配置示例（供用户粘贴到 OpenClaw 的 MCP JSON 或等价界面）
 
@@ -22,11 +22,11 @@
 {
   "mcpServers": {
     "loveclaw-bind": {
-      "url": "https://你的站点根/api/mcp/bind",
+      "url": "http://localhost:3000/api/mcp/bind",
       "headers": {}
     },
     "loveclaw-agent": {
-      "url": "https://你的站点根/api/mcp/agent",
+      "url": "http://localhost:3000/api/mcp/agent",
       "headers": {
         "Authorization": "Bearer loveclaw_你的正式密钥"
       }
