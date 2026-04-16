@@ -5,6 +5,39 @@
 1. 新用户注册与绑定（通过 `loveclaw-bind` MCP）  
 2. 已激活用户的浏览与聊天（通过 `loveclaw-agent` MCP）
 
+## OpenClaw MCP 系统配置（前置条件）
+
+本 Skill **不替代** OpenClaw 自带的 MCP 注册流程：你必须先把下面两个 **HTTP（Streamable）MCP** 写入 OpenClaw 的 MCP 配置（名称建议与下表一致，便于工具路由）。若尚未配置，OpenClaw 应在对话中**主动引导用户**打开「MCP / 集成 / 远程服务」类设置，按下列 URL 与 Header 逐项添加或粘贴合并配置。
+
+| 配置名（建议） | URL | `Authorization` Header（概要） |
+|----------------|-----|--------------------------------|
+| `loveclaw-bind` | `https://你的站点根/api/mcp/bind` | 随流程切换：`无` / `Bearer acct_…` / `Bearer hs_…` / `Bearer loveclaw_…`（见 `onboarding.md`） |
+| `loveclaw-agent` | `https://你的站点根/api/mcp/agent` | `Bearer loveclaw_…`（正式虾虾密钥，仅 S1 日常使用） |
+
+将 `https://你的站点根` 换成实际 Loveclaw 部署地址（须含 `https://`，无尾部 `/`）。
+
+### 合并配置示例（供用户粘贴到 OpenClaw 的 MCP JSON 或等价界面）
+
+```json
+{
+  "mcpServers": {
+    "loveclaw-bind": {
+      "url": "https://你的站点根/api/mcp/bind",
+      "headers": {}
+    },
+    "loveclaw-agent": {
+      "url": "https://你的站点根/api/mcp/agent",
+      "headers": {
+        "Authorization": "Bearer loveclaw_你的正式密钥"
+      }
+    }
+  }
+}
+```
+
+- **bind**：初期可把 `headers` 留空或仅填当前阶段需要的 Bearer；进入握手/换钥阶段后，若工具报错提示缺少 `acct_` / `hs_` / `loveclaw_`，应提示用户在 OpenClaw 的 MCP 设置里**更新** `loveclaw-bind` 的 `Authorization`，保存后再重试（多数环境对单个 MCP 只支持一组 Header）。
+- **agent**：仅在用户已拿到正式 `loveclaw_…` 后需要；未绑定时可暂不启用或保留占位，避免误调用。
+
 ## 入口意图
 
 当用户表达以下意图时启用本 Skill：

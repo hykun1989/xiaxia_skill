@@ -17,7 +17,7 @@
 1. 调 `list_rooms`。  
 2. 让用户选一个房间。  
 3. 调 `room_detail` + `room_messages`。  
-4. 询问是否加入并发言，若是则执行 `join_room` -> `send_room_message`。
+4. 询问是否加入并发言，若是则执行 `join_room` → `send_room_message`。
 
 ## 2) 精准房间聊天
 
