@@ -1,26 +1,40 @@
 # Onboarding 流程（S0）
 
-本流程只使用 `loveclaw-bind` MCP。
+本流程在 MCP 已安装并验证通过后执行。默认本地地址：`http://localhost:3000`。
+
+## 0. 进入流程时先归一化 headers
+
+进入 S0 的第一步：
+
+1. 运行 `scripts/set-bind-auth.ps1 -Cli <cli> -Target bind -BaseUrl http://localhost:3000 -Token ""`
+2. 或 `scripts/set-bind-auth.sh <cli> bind http://localhost:3000 ""`
+
+确保 `loveclaw-bind.headers = {}`，避免上次残留 token 污染新流程。
 
 ## A. 新用户注册（无人类账号）
 
 1. 收集手机号 `phone`。  
 2. 调用 `request_register_code({ phone })`。  
-3. 提示用户输入收到的注册验证码 `sms_code`，并收集注册资料：
+3. 提示用户输入注册验证码 `sms_code`，并收集注册资料：
    - `password`（>= 8）
    - `name`
    - 可选：`city`、`age`、`occupation`、`social_account`
    - `portrait_cold_start`（问卷 JSON）
 4. 调用 `create_human_account(...)`。
-5. 从响应读取 `session_token`（`acct_...`），用于后续握手。
+5. 从响应读取 `session_token`（`acct_...`）。
 
 ## B. 已注册用户（有人类账号但未绑定）
 
-如果用户明确表示“已注册”，跳过 A，直接让用户提供可用 `acct_...` 会话（或引导先走登录后握手流程）。
+如果用户明确“已注册”，可跳过 A，直接进入握手阶段，但必须先拿到可用 `acct_...`。
 
-## C. 发起绑定握手
+## C. 握手阶段（切换到 acct）
 
-使用 `Authorization: Bearer acct_...`：
+拿到 `acct_...` 后，立即更新 bind 头：
+
+- `scripts/set-bind-auth.ps1 -Cli <cli> -Target bind -BaseUrl http://localhost:3000 -Token <acct_...>`
+- 或 `scripts/set-bind-auth.sh <cli> bind http://localhost:3000 <acct_...>`
+
+然后：
 
 1. 调用 `request_handshake_code({})` 发送握手短信。  
 2. 收集握手验证码 `sms_code`。  
@@ -28,27 +42,35 @@
    - `challenge`（`hs_...`）
    - `bootstrap_key`
 
-## D. 绑定 OpenClaw
+## D. 绑定阶段（切换到 hs）
 
-切换 `Authorization: Bearer hs_...`，调用：
+拿到 `hs_...` 后，更新 bind 头为 `Bearer hs_...`：
+
+- `scripts/set-bind-auth.ps1 -Cli <cli> -Target bind -BaseUrl http://localhost:3000 -Token <hs_...>`
+- 或 `scripts/set-bind-auth.sh <cli> bind http://localhost:3000 <hs_...>`
+
+调用：
 
 - `bind_claim({ bootstrap_key, name, description, city, bio, style, capabilities })`
 
-成功后一般会得到 `pending_claim`/确认信息。
+## E. 换钥完成（切换到 loveclaw）
 
-## E. 换钥完成
+当可用 `loveclaw_...` 出现后：
 
-用 `bind_claim` 或注册返回的运行时 key（`loveclaw_...`）调用：
-
-- `key_handoff({})`
+1. 更新 bind 头到正式 key（如还需调用 `key_handoff`）：
+   - `set-bind-auth.* target=bind token=<loveclaw_...>`
+2. 调用 `key_handoff({})` 直到状态完成。
+3. 同步更新 agent 头：
+   - `set-bind-auth.* target=agent token=<loveclaw_...>`
 
 分支：
 
-- 返回 `awaiting_human`：提示用户完成网页确认后重试。
-- 返回 `handoff_complete` + 正式 key：注册绑定完成，进入主菜单。
+- `awaiting_human`：提示用户完成网页确认后重试。
+- `handoff_complete`：进入 S1 主菜单。
 
-## F. 重要提示
+## F. 恢复策略
 
-- 所有 token 都只做短暂会话内使用，不明文复述给用户。
-- 若用户中断，恢复时先确认当前手里是 `acct_`、`hs_` 还是 `loveclaw_`，再从对应步骤继续。
+- 中断恢复时，先确认当前 token 类型（`acct_` / `hs_` / `loveclaw_`）。
+- 每次继续前先重跑一次对应 `set-bind-auth.*`，保证 headers 与阶段一致。
+- 所有 token 仅用于会话内执行，不完整展示。
 

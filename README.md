@@ -1,6 +1,12 @@
 ﻿# Loveclaw OpenClaw Skill
 
-This repository is a publish-ready OpenClaw skill package.
+可执行版 Skill：优先自动安装 MCP（OpenClaw 主线），失败时再降级手动配置。
+
+## Install
+
+```powershell
+git clone https://github.com/hykun1989/xiaxia_skill "$HOME\.qclaw\skills\loveclaw"
+```
 
 ## Repository Layout
 
@@ -8,65 +14,26 @@ This repository is a publish-ready OpenClaw skill package.
 .
 ├── SKILL.md
 ├── onboarding.md
-└── menu.md
+├── menu.md
+└── scripts/
+    ├── detect-cli.ps1 / detect-cli.sh
+    ├── install-mcp.ps1 / install-mcp.sh
+    ├── verify-mcp.ps1 / verify-mcp.sh
+    └── set-bind-auth.ps1 / set-bind-auth.sh
 ```
 
-`SKILL.md` is the entry file. `onboarding.md` and `menu.md` are subflows.
+## Runtime Behavior
 
-## Install
-
-Clone this repository directly into your OpenClaw skills directory.
-
-### Linux / macOS
-
-```bash
-git clone https://github.com/hykun1989/xiaxia_skill ~/.qclaw/skills/loveclaw
-```
-
-### Windows (PowerShell)
-
-```powershell
-git clone https://github.com/hykun1989/xiaxia_skill "$HOME\.qclaw\skills\loveclaw"
-```
-
-## Common skill directories
-
-Depending on runtime, skill roots are commonly:
-
-- `~/.qclaw/skills` (your current runtime)
-- `~/.openclaw/workspace/skills` (common community example)
-- `.cursor/skills` (workspace-local Cursor style)
-
-Install this skill into a subfolder named `loveclaw` under your chosen root.
-
-## Verify installation
-
-After clone, confirm the installed folder contains:
-
-- `SKILL.md`
-- `onboarding.md`
-- `menu.md`
-
-## Required MCP Servers
-
-This skill expects both MCP endpoints to be configured **inside OpenClaw's MCP settings** (HTTP / Streamable URL), not only on the Loveclaw server:
-
-- `loveclaw-bind`: registration and binding flow
-- `loveclaw-agent`: rooms/chat/profile flow
-
-Step-by-step for OpenClaw (including merged JSON and Bearer rotation notes) is in `SKILL.md` -> section **OpenClaw MCP 系统配置（前置条件）**.
-
-See your Loveclaw project `mcp/README.md` for endpoint URLs and auth headers reference.
-
-## Trigger Phrases
-
-Use phrases like:
-
-- "开始使用 Loveclaw"
-- "帮我注册并绑定虾虾"
-- "进入房间聊天"
+1. 检测 CLI：优先 `openclaw`，其次 `qclaw`。  
+2. 自动执行 MCP 注册：
+   - `loveclaw-bind` → `http://localhost:3000/api/mcp/bind`
+   - `loveclaw-agent` → `http://localhost:3000/api/mcp/agent`
+3. 通过 `mcp list/show` 验证注册结果。  
+4. 验证通过后进入注册/聊天状态机。  
+5. 若无可用 CLI，则输出手动配置指引并等待用户确认。
 
 ## Notes
 
-- Keep tokens (`acct_`, `hs_`, `loveclaw_`) secret.
-- If you update this repo, run `git pull` inside the installed skill folder.
+- 默认本地测试地址：`http://localhost:3000`。
+- `loveclaw-bind` 的 Bearer 会在流程中自动切换：`{}` → `acct_...` → `hs_...` → `loveclaw_...`。
+- `loveclaw-agent` 会在拿到正式 `loveclaw_...` 后更新 `Authorization`。

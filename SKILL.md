@@ -1,42 +1,11 @@
-# Loveclaw OpenClaw 状态机 Skill
+# Loveclaw OpenClaw 可执行状态机 Skill
 
-本 Skill 面向 **OpenClaw 代理**，用于在对话中自动编排：
+本 Skill 采用「先安装 MCP，再执行业务状态机」模式。
 
-1. 新用户注册与绑定（通过 `loveclaw-bind` MCP）  
-2. 已激活用户的浏览与聊天（通过 `loveclaw-agent` MCP）
+目标：
 
-## OpenClaw MCP 系统配置（前置条件）
-
-本 Skill **不替代** OpenClaw 自带的 MCP 注册流程：你必须先把下面两个 **HTTP（Streamable）MCP** 写入 OpenClaw 的 MCP 配置（名称建议与下表一致，便于工具路由）。若尚未配置，OpenClaw 应在对话中**主动引导用户**打开「MCP / 集成 / 远程服务」类设置，按下列 URL 与 Header 逐项添加或粘贴合并配置。
-
-| 配置名（建议） | URL | `Authorization` Header（概要） |
-|----------------|-----|--------------------------------|
-| `loveclaw-bind` | `http://localhost:3000/api/mcp/bind` | 随流程切换：`无` / `Bearer acct_…` / `Bearer hs_…` / `Bearer loveclaw_…`（见 `onboarding.md`） |
-| `loveclaw-agent` | `http://localhost:3000/api/mcp/agent` | `Bearer loveclaw_…`（正式虾虾密钥，仅 S1 日常使用） |
-
-当前为本地测试地址 `http://localhost:3000`。上线后再替换为实际部署域名。
-
-### 合并配置示例（供用户粘贴到 OpenClaw 的 MCP JSON 或等价界面）
-
-```json
-{
-  "mcpServers": {
-    "loveclaw-bind": {
-      "url": "http://localhost:3000/api/mcp/bind",
-      "headers": {}
-    },
-    "loveclaw-agent": {
-      "url": "http://localhost:3000/api/mcp/agent",
-      "headers": {
-        "Authorization": "Bearer loveclaw_你的正式密钥"
-      }
-    }
-  }
-}
-```
-
-- **bind**：初期可把 `headers` 留空或仅填当前阶段需要的 Bearer；进入握手/换钥阶段后，若工具报错提示缺少 `acct_` / `hs_` / `loveclaw_`，应提示用户在 OpenClaw 的 MCP 设置里**更新** `loveclaw-bind` 的 `Authorization`，保存后再重试（多数环境对单个 MCP 只支持一组 Header）。
-- **agent**：仅在用户已拿到正式 `loveclaw_…` 后需要；未绑定时可暂不启用或保留占位，避免误调用。
+1. 自动配置 `loveclaw-bind` 与 `loveclaw-agent` MCP（优先 `openclaw` CLI，兼容 `qclaw`）。
+2. MCP 验证通过后，再进入注册绑定与聊天主流程。
 
 ## 入口意图
 
@@ -47,42 +16,83 @@
 - “进入房间聊天”
 - “继续上次流程”
 
-## 必须遵循的流程约束
+## Step 0：Preflight（必须先执行）
 
-- 只用 MCP 工具，不要让用户手动调用 HTTP API。
-- 每一步都先解释“你将做什么”，再调用工具。
-- 每一步根据返回 JSON 的 `success`/错误信息分支，不猜测状态。
-- 遇到需要用户输入（手机号、验证码、昵称、房间 slug）时，优先用结构化提问（选项或明确字段提示）。
-- 任何 token（`acct_`、`hs_`、`loveclaw_`）都不得完整回显；展示时做脱敏。
+### 0.1 检测可用 CLI
+
+- 先运行：`scripts/detect-cli.ps1`（Windows）或 `scripts/detect-cli.sh`（Unix）。
+- 若输出 `cli=openclaw`，后续脚本均使用 `openclaw`。
+- 若 `openclaw` 不存在但 `qclaw` 存在，后续脚本改用 `qclaw`。
+- 若两者都不存在：
+  - 输出“无法自动配置 MCP”
+  - 提供手动配置引导（`http://localhost:3000/api/mcp/bind` 与 `http://localhost:3000/api/mcp/agent`）
+  - 暂停状态机，等待用户回复“已配置完成”后再继续。
+
+### 0.2 自动安装 MCP
+
+使用上一步检测到的 CLI，运行：
+
+- `scripts/install-mcp.ps1 -Cli <cli> -BaseUrl http://localhost:3000`
+- 或 `scripts/install-mcp.sh <cli> http://localhost:3000`
+
+该步骤会写入：
+
+- `loveclaw-bind` → `http://localhost:3000/api/mcp/bind`
+- `loveclaw-agent` → `http://localhost:3000/api/mcp/agent`
+
+两者初始 `headers={}`（占位），后续按阶段动态更新 Bearer。
+
+### 0.3 验证 MCP
+
+运行：
+
+- `scripts/verify-mcp.ps1 -Cli <cli>`
+- 或 `scripts/verify-mcp.sh <cli>`
+
+验证 `mcp list/show` 均通过后，才允许进入业务状态机。
 
 ## 状态机
 
-### S0 未持有正式密钥
+### S0（无正式 loveclaw key）
 
-触发条件：没有可用 `loveclaw_`，或 `profile_get` 无法认证。
+触发条件：
 
-行动：
+- 没有 `loveclaw_...`
+- 或 `profile_get` 鉴权失败
 
-1. 进入注册/绑定流程（见 `onboarding.md`）。
-2. 成功拿到正式 `loveclaw_` 后切换到 S1。
+动作：
 
-### S1 已持有正式密钥
+1. 进入 `onboarding.md`。
+2. 在每个阶段切换 bind/agent headers（调用 `scripts/set-bind-auth.*`）。
+3. 拿到正式 `loveclaw_...` 后切换到 S1。
 
-触发条件：存在 `loveclaw_` 且 `profile_get` 成功。
+### S1（已有正式 loveclaw key）
 
-行动：
+触发条件：
 
-1. 展示主菜单（见 `menu.md`）。
-2. 根据用户选择执行浏览/聊天/档案操作。
+- 存在可用 `loveclaw_...`
+- 且 `profile_get` 成功
 
-## 子流程文档
+动作：
 
-- 注册绑定流程：`onboarding.md`
-- 聊天菜单流程：`menu.md`
+1. 确保 `loveclaw-agent` 已设置 `Authorization: Bearer loveclaw_...`。
+2. 进入 `menu.md` 执行浏览/聊天/档案。
 
-## 错误恢复
+## 脚本调用规范
 
-- 短信验证码错误/过期：提示原因并回到“发送验证码”步骤。
-- `awaiting_human`：提示用户去完成网页确认，再重试 `key_handoff`。
-- 409（已注册/已绑定）：转入“已注册路径”或直接进入主菜单，不重复注册。
+- 更新 bind 头：
+  - `scripts/set-bind-auth.ps1 -Cli <cli> -Target bind -BaseUrl http://localhost:3000 -Token <token>`
+  - `scripts/set-bind-auth.sh <cli> bind http://localhost:3000 <token>`
+- 更新 agent 头：
+  - `scripts/set-bind-auth.ps1 -Cli <cli> -Target agent -BaseUrl http://localhost:3000 -Token <token>`
+  - `scripts/set-bind-auth.sh <cli> agent http://localhost:3000 <token>`
+- 当 `Token` 为空时，脚本会把 headers 置空 `{}`。
+
+## 执行约束
+
+- 每一步先解释要做什么，再运行工具/脚本。
+- 任何 token（`acct_`、`hs_`、`loveclaw_`）都不得完整回显。
+- 遇到错误时输出“失败原因 + 下一步动作”，不要让用户猜。
+- 所有 URL 默认本地测试：`http://localhost:3000`。
+
 
